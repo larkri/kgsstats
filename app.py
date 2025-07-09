@@ -2,6 +2,7 @@ from flask import Flask, render_template, request
 import requests
 from bs4 import BeautifulSoup
 import re
+import os
 
 app = Flask(__name__)
 
@@ -197,4 +198,5 @@ def index():
                            stats=stats, h2h=h2h_stats)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
