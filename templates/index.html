@@ -1,136 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>KGS Stats</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    /* Extra styling to keep chart aspect ratio */
-    .chart-container {
-      position: relative;
-      width: 300px;
-      height: 300px;
-      margin: auto;
-    }
-
-    /* Flex container for stats and chart side by side */
-    .stats-flex {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 40px;
-      margin-top: 20px;
-    }
-
-    .stats-box {
-      min-width: 280px;
-      max-width: 400px;
-    }
-  </style>
+    <meta charset="UTF-8" />
+    <title>KGS Statistics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+      /* Säkerställ att canvas behåller god kvalitet och proportion */
+      .stats-chart-wrapper {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 20px;
+          margin-top: 20px;
+          justify-content: center;
+      }
+      .stats-pie-chart, .stats-bar-chart {
+          flex: 1 1 300px;
+          min-width: 280px;
+          max-width: 400px;
+          height: 300px; /* fixad höjd för bra proportion */
+          position: relative;
+      }
+      /* Overlay hidden som standard */
+      #overlay {
+          display: none;
+          position: fixed;
+          top:0; left:0; right:0; bottom:0;
+          background: rgba(255,255,255,0.8);
+          z-index: 9999;
+          font-size: 2rem;
+          text-align: center;
+          padding-top: 20vh;
+          color: #333;
+          user-select: none;
+      }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>KGS Player Statistics</h1>
-    <form method="POST">
-      <label for="username">Player username:</label><br />
-      <input type="text" id="username" name="username" required /><br /><br />
-
-      <label for="opponent">Opponent username (optional):</label><br />
-      <input type="text" id="opponent" name="opponent" /><br /><br />
-
-      <button type="submit">Get Statistics</button>
+    <h1>KGS Statistics</h1>
+    <form method="POST" id="statsForm">
+        Player: <input name="username" value="{{ username }}" required>
+        Opponent (optional): <input name="opponent" value="{{ opponent }}">
+        <button type="submit">Get statistics</button>
     </form>
 
-    {% if error %}
-      <p class="error">{{ error }}</p>
-    {% endif %}
+    <!-- Overlay shown while loading -->
+    <div id="overlay">🔄 Loading data, please wait...</div>
 
-    {% if stats %}
-      <div class="stats-flex">
-        <div class="stats-box">
-          <h2>Statistics for {{ stats.player_name }}</h2>
-          <p><strong>Total games played:</strong> {{ stats.total_matches }}</p>
-          <p><strong>Wins:</strong> {{ stats.wins }}</p>
-          <p><strong>Losses:</strong> {{ stats.losses }}</p>
-          <p><strong>Win ratio:</strong> {{ stats.win_ratio }}%</p>
-          <div class="chart-container">
-            <canvas id="playerChart"></canvas>
-          </div>
+    {% if stats.total_wins + stats.total_losses > 0 %}
+        <h2>Statistics for {{ username }}</h2>
+        <table class="stats-table">
+            <tr><th>Total games played</th><td>{{ stats.total_wins + stats.total_losses }}</td></tr>
+            <tr><th>Wins</th><td>{{ stats.total_wins }}</td></tr>
+            <tr><th>Losses</th><td>{{ stats.total_losses }}</td></tr>
+        </table>
+
+        <div class="stats-chart-wrapper">
+            <div class="stats-pie-chart">
+                <canvas id="resultChart"></canvas>
+            </div>
+
+            <div class="stats-bar-chart">
+                <canvas id="detailedRankChart"></canvas>
+            </div>
         </div>
 
-        {% if h2h_stats %}
-        <div class="stats-box">
-          <h2>Head-to-Head: {{ stats.player_name }} vs {{ stats.opponent_name }}</h2>
-          <p><strong>Total games played:</strong> {{ h2h_stats.total_matches }}</p>
-          <p><strong>{{ stats.player_name }} wins:</strong> {{ h2h_stats.player_wins }}</p>
-          <p><strong>{{ stats.opponent_name }} wins:</strong> {{ h2h_stats.opponent_wins }}</p>
-          <p><strong>Draws:</strong> {{ h2h_stats.draws }}</p>
-          <p><strong>Win ratio for {{ stats.player_name }}:</strong> {{ h2h_stats.win_ratio }}%</p>
-          <div class="chart-container">
-            <canvas id="h2hChart"></canvas>
-          </div>
-        </div>
-        {% endif %}
-      </div>
-    {% endif %}
-  </div>
+        <script>
+            const softColors = {
+                green: '#81C784',
+                red: '#E57373',
+                blue: '#64B5F6',
+                orange: '#FFB74D',
+                gray: '#90A4AE'
+            };
 
-  <script>
-    {% if stats %}
-    const playerCtx = document.getElementById('playerChart').getContext('2d');
-    const playerChart = new Chart(playerCtx, {
-      type: 'doughnut',
-      data: {
-        labels: ['Wins', 'Losses'],
-        datasets: [{
-          label: 'Player Results',
-          data: [{{ stats.wins }}, {{ stats.losses }}],
-          backgroundColor: ['#4CAF50', '#F44336'],
-          hoverOffset: 10
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: { position: 'bottom' },
-          title: {
-            display: true,
-            text: 'Win / Loss Ratio'
-          }
-        }
-      }
-    });
+            // Pie chart Wins/Losses (for username)
+            new Chart(document.getElementById('resultChart'), {
+                type: 'pie',
+                data: {
+                    labels: ['Wins', 'Losses'],
+                    datasets: [{
+                        data: [{{ stats.total_wins }}, {{ stats.total_losses }}],
+                        backgroundColor: [softColors.green, softColors.red]
+                    }]
+                },
+                options: {
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+
+            // Detailed bar chart (for username)
+            new Chart(document.getElementById('detailedRankChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Vs Higher', 'Vs Equal', 'Vs Lower', 'Vs Unknown'],
+                    datasets: [
+                        {
+                            label: 'Wins',
+                            backgroundColor: softColors.blue,
+                            data: [
+                                {{ stats.wins_vs_higher_rank }},
+                                {{ stats.wins_vs_equal_rank }},
+                                {{ stats.wins_vs_lower_rank }},
+                                {{ stats.wins_vs_unknown_rank }}
+                            ]
+                        },
+                        {
+                            label: 'Losses',
+                            backgroundColor: softColors.orange,
+                            data: [
+                                {{ stats.losses_vs_higher_rank }},
+                                {{ stats.losses_vs_equal_rank }},
+                                {{ stats.losses_vs_lower_rank }},
+                                {{ stats.losses_vs_unknown_rank }}
+                            ]
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 }
+                        }
+                    }
+                }
+            });
+        </script>
     {% endif %}
 
-    {% if h2h_stats %}
-    const h2hCtx = document.getElementById('h2hChart').getContext('2d');
-    const h2hChart = new Chart(h2hCtx, {
-      type: 'doughnut',
-      data: {
-        labels: ['{{ stats.player_name }} Wins', '{{ stats.opponent_name }} Wins', 'Draws'],
-        datasets: [{
-          label: 'Head-to-Head Results',
-          data: [{{ h2h_stats.player_wins }}, {{ h2h_stats.opponent_wins }}, {{ h2h_stats.draws }}],
-          backgroundColor: ['#4CAF50', '#F44336', '#FFC107'],
-          hoverOffset: 10
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: { position: 'bottom' },
-          title: {
-            display: true,
-            text: 'Head-to-Head Win Ratio'
-          }
-        }
-      }
-    });
+    {% if h2h.matches_found > 0 %}
+        <h2>Head-to-Head: {{ h2h.player1 }} vs {{ h2h.player2 }}</h2>
+        <table class="stats-table">
+            <tr><th>Games played</th><td>{{ h2h.matches_found }}</td></tr>
+            <tr><th>{{ h2h.player1 }} wins</th><td>{{ h2h.player1_wins }}</td></tr>
+            <tr><th>{{ h2h.player2 }} wins</th><td>{{ h2h.player2_wins }}</td></tr>
+            <tr><th>Win rate {{ h2h.player1 }}</th><td>{{ h2h.player1_win_pct }}%</td></tr>
+            <tr><th>Win rate {{ h2h.player2 }}</th><td>{{ h2h.player2_win_pct }}%</td></tr>
+        </table>
     {% endif %}
-  </script>
+
+    <script>
+        document.getElementById('statsForm').addEventListener('submit', function () {
+            document.getElementById('overlay').style.display = 'block';
+        });
+    </script>
 </body>
 </html>
