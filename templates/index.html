@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8" />
+    <title>KGS Statistik</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>KGS Statistik</h1>
+    <form method="POST" id="statsForm">
+        Spelare: <input name="username" value="{{ username }}" required>
+        Motståndare (valfritt): <input name="opponent" value="{{ opponent }}">
+        <button type="submit">Hämta statistik</button>
+    </form>
+
+    <!-- Overlay som visas vid laddning -->
+    <div id="overlay">🔄 Laddar data, vänligen vänta...</div>
+
+    {% if stats.total_wins + stats.total_losses > 0 %}
+        <h2>Statistik för {{ username }}</h2>
+        <table class="stats-table">
+            <tr><th>Matcher totalt</th><td>{{ stats.total_wins + stats.total_losses }}</td></tr>
+            <tr><th>Vinster</th><td>{{ stats.total_wins }}</td></tr>
+            <tr><th>Förluster</th><td>{{ stats.total_losses }}</td></tr>
+        </table>
+
+        <div class="stats-chart-wrapper">
+            <div class="stats-pie-chart">
+                <canvas id="resultChart"></canvas>
+            </div>
+
+            <div class="stats-bar-chart">
+                <canvas id="detailedRankChart"></canvas>
+            </div>
+        </div>
+
+        <script>
+            const softColors = {
+                green: '#81C784',
+                red: '#E57373',
+                blue: '#64B5F6',
+                orange: '#FFB74D',
+                gray: '#90A4AE'
+            };
+
+            // Pajdiagram Vinster/Förluster (för username)
+            new Chart(document.getElementById('resultChart'), {
+                type: 'pie',
+                data: {
+                    labels: ['Vinster', 'Förluster'],
+                    datasets: [{
+                        data: [{{ stats.total_wins }}, {{ stats.total_losses }}],
+                        backgroundColor: [softColors.green, softColors.red]
+                    }]
+                },
+                options: {
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+
+            // Detaljerat stapeldiagram (för username)
+            new Chart(document.getElementById('detailedRankChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Mot högre', 'Mot lika', 'Mot lägre', 'Mot okänd'],
+                    datasets: [
+                        {
+                            label: 'Vinster',
+                            backgroundColor: softColors.blue,
+                            data: [
+                                {{ stats.wins_vs_higher_rank }},
+                                {{ stats.wins_vs_equal_rank }},
+                                {{ stats.wins_vs_lower_rank }},
+                                {{ stats.wins_vs_unknown_rank }}
+                            ]
+                        },
+                        {
+                            label: 'Förluster',
+                            backgroundColor: softColors.orange,
+                            data: [
+                                {{ stats.losses_vs_higher_rank }},
+                                {{ stats.losses_vs_equal_rank }},
+                                {{ stats.losses_vs_lower_rank }},
+                                {{ stats.losses_vs_unknown_rank }}
+                            ]
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 }
+                        }
+                    }
+                }
+            });
+        </script>
+    {% endif %}
+
+    {% if h2h.matches_found > 0 %}
+        <h2>Head-to-Head: {{ h2h.player1 }} vs {{ h2h.player2 }}</h2>
+        <table class="stats-table">
+            <tr><th>Matcher</th><td>{{ h2h.matches_found }}</td></tr>
+            <tr><th>{{ h2h.player1 }} vinster</th><td>{{ h2h.player1_wins }}</td></tr>
+            <tr><th>{{ h2h.player2 }} vinster</th><td>{{ h2h.player2_wins }}</td></tr>
+            <tr><th>Vinstprocent {{ h2h.player1 }}</th><td>{{ h2h.player1_win_pct }}%</td></tr>
+            <tr><th>Vinstprocent {{ h2h.player2 }}</th><td>{{ h2h.player2_win_pct }}%</td></tr>
+        </table>
+    {% endif %}
+
+    <script>
+        document.getElementById('statsForm').addEventListener('submit', function () {
+            document.getElementById('overlay').style.display = 'block';
+        });
+    </script>
+</body>
+</html>
